@@ -92,6 +92,13 @@ h1 {
   flex: 0 0 auto;
 }
 
+.process-mode-note {
+  max-width: 310px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .process-mode {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -617,6 +624,10 @@ h2 {
 
   .process-mode {
     width: 100%;
+  }
+
+  .process-mode-note {
+    max-width: none;
   }
 
   .panel {
