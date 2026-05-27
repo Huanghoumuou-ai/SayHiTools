@@ -461,6 +461,42 @@ h2 {
   gap: 12px;
 }
 
+.field-group {
+  margin: 2px 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.field-group .field {
+  margin-bottom: 10px;
+}
+
+.field-group .grid-2:last-child .field {
+  margin-bottom: 0;
+}
+
+.field-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.field-group-head > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.compact-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .template-preview-wrap {
   display: grid;
   place-items: center;

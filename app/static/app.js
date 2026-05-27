@@ -8,6 +8,11 @@ const dropzone = document.querySelector("#dropzone");
 const clearProductsButton = document.querySelector("#clearProductsButton");
 const widthInput = document.querySelector("#widthInput");
 const heightInput = document.querySelector("#heightInput");
+const productAreaWidthInput = document.querySelector("#productAreaWidthInput");
+const productAreaHeightInput = document.querySelector("#productAreaHeightInput");
+const productCenterXInput = document.querySelector("#productCenterXInput");
+const productCenterYInput = document.querySelector("#productCenterYInput");
+const centerProductButton = document.querySelector("#centerProductButton");
 const backgroundColorInput = document.querySelector("#backgroundColorInput");
 const baseNameInput = document.querySelector("#baseNameInput");
 const processBtn = document.querySelector("#processBtn");
@@ -25,7 +30,6 @@ let selectedProductFiles = [];
 let generatedPreviews = [];
 let motionObserver = null;
 const PROCESS_CONCURRENCY = 3;
-const PRODUCT_AREA_RATIO = 0.75;
 const CRC_TABLE = buildCrcTable();
 
 function setStatus(message) {
@@ -216,7 +220,27 @@ function validateForm() {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 64 || height < 64 || width > 5000 || height > 5000) {
     throw new Error("输出宽高需要在 64 到 5000 之间");
   }
-  return { files, width, height };
+  const productAreaWidth = Number(productAreaWidthInput.value);
+  const productAreaHeight = Number(productAreaHeightInput.value);
+  if (
+    !Number.isInteger(productAreaWidth) ||
+    !Number.isInteger(productAreaHeight) ||
+    productAreaWidth < 1 ||
+    productAreaHeight < 1 ||
+    productAreaWidth > 5000 ||
+    productAreaHeight > 5000
+  ) {
+    throw new Error("商品图区域宽高需要在 1 到 5000 之间");
+  }
+  const productCenterX = productCenterXInput.value.trim() ? Number(productCenterXInput.value) : null;
+  const productCenterY = productCenterYInput.value.trim() ? Number(productCenterYInput.value) : null;
+  if (
+    (productCenterX !== null && (!Number.isInteger(productCenterX) || productCenterX < 0 || productCenterX > width)) ||
+    (productCenterY !== null && (!Number.isInteger(productCenterY) || productCenterY < 0 || productCenterY > height))
+  ) {
+    throw new Error("商品图中心位置需要在输出画布范围内");
+  }
+  return { files, width, height, productAreaWidth, productAreaHeight, productCenterX, productCenterY };
 }
 
 function buildProcessFormData({ preview, outputNames } = { preview: true }) {
@@ -226,6 +250,10 @@ function buildProcessFormData({ preview, outputNames } = { preview: true }) {
   formData.append("template_id", templateSelect.value || "default");
   formData.append("width", String(width));
   formData.append("height", String(height));
+  formData.append("product_area_width", String(productAreaWidthInput.value || 1080));
+  formData.append("product_area_height", String(productAreaHeightInput.value || 1080));
+  if (productCenterXInput.value.trim()) formData.append("product_center_x", productCenterXInput.value.trim());
+  if (productCenterYInput.value.trim()) formData.append("product_center_y", productCenterYInput.value.trim());
   formData.append("background_color", backgroundColorInput.value || "#ffffff");
   formData.append("base_name", baseNameInput.value || "product");
   formData.append("preview", preview ? "true" : "false");
@@ -235,12 +263,16 @@ function buildProcessFormData({ preview, outputNames } = { preview: true }) {
   return formData;
 }
 
-function buildSingleProcessFormData(file, index, width, height) {
+function buildSingleProcessFormData(file, index, width, height, area) {
   const formData = new FormData();
   formData.append("product", file);
   formData.append("template_id", templateSelect.value || "default");
   formData.append("width", String(width));
   formData.append("height", String(height));
+  formData.append("product_area_width", String(area.productAreaWidth));
+  formData.append("product_area_height", String(area.productAreaHeight));
+  if (area.productCenterX !== null) formData.append("product_center_x", String(area.productCenterX));
+  if (area.productCenterY !== null) formData.append("product_center_y", String(area.productCenterY));
   formData.append("background_color", backgroundColorInput.value || "#ffffff");
   formData.append("base_name", baseNameInput.value || "product");
   formData.append("index", String(index));
@@ -301,7 +333,19 @@ async function canvasToPngDataUrl(canvas) {
   });
 }
 
-async function processLocalImage(file, index, width, height, templateImage) {
+function resolveProductArea(width, height, area) {
+  const areaWidth = Math.min(area.productAreaWidth, width);
+  const areaHeight = Math.min(area.productAreaHeight, height);
+  const centerX = area.productCenterX ?? Math.round(width / 2);
+  const centerY = area.productCenterY ?? Math.round(height / 2);
+  let left = Math.round(centerX - areaWidth / 2);
+  let top = Math.round(centerY - areaHeight / 2);
+  left = Math.min(Math.max(left, 0), width - areaWidth);
+  top = Math.min(Math.max(top, 0), height - areaHeight);
+  return { left, top, areaWidth, areaHeight };
+}
+
+async function processLocalImage(file, index, width, height, area, templateImage) {
   const productImage = await loadImage(file);
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -311,13 +355,12 @@ async function processLocalImage(file, index, width, height, templateImage) {
   context.fillStyle = backgroundColorInput.value || "#ffffff";
   context.fillRect(0, 0, width, height);
 
-  const areaWidth = Math.max(1, Math.round(width * PRODUCT_AREA_RATIO));
-  const areaHeight = Math.max(1, Math.round(height * PRODUCT_AREA_RATIO));
+  const { left, top, areaWidth, areaHeight } = resolveProductArea(width, height, area);
   const scale = Math.min(areaWidth / productImage.naturalWidth, areaHeight / productImage.naturalHeight);
   const drawWidth = Math.round(productImage.naturalWidth * scale);
   const drawHeight = Math.round(productImage.naturalHeight * scale);
-  const productX = Math.round((width - drawWidth) / 2);
-  const productY = Math.round((height - drawHeight) / 2);
+  const productX = left + Math.round((areaWidth - drawWidth) / 2);
+  const productY = top + Math.round((areaHeight - drawHeight) / 2);
 
   context.drawImage(productImage, productX, productY, drawWidth, drawHeight);
   context.drawImage(templateImage, 0, 0, width, height);
@@ -328,10 +371,10 @@ async function processLocalImage(file, index, width, height, templateImage) {
   };
 }
 
-async function processServerImage(file, index, width, height) {
+async function processServerImage(file, index, width, height, area) {
   const response = await fetch("/api/process-one", {
     method: "POST",
-    body: buildSingleProcessFormData(file, index, width, height),
+    body: buildSingleProcessFormData(file, index, width, height, area),
   });
   const data = await response.json();
   if (!response.ok) {
@@ -509,7 +552,8 @@ function disableDownload() {
 
 async function processImages() {
   try {
-    const { files, width, height } = validateForm();
+    const { files, width, height, productAreaWidth, productAreaHeight, productCenterX, productCenterY } = validateForm();
+    const area = { productAreaWidth, productAreaHeight, productCenterX, productCenterY };
     const processMode = getProcessMode();
     processBtn.disabled = true;
     disableDownload();
@@ -533,8 +577,8 @@ async function processImages() {
         setStatus(`正在生成 ${completed} / ${files.length}`);
 
         previews[offset] = workerType === "local"
-          ? await processLocalImage(files[offset], current, width, height, templateImage)
-          : await processServerImage(files[offset], current, width, height);
+          ? await processLocalImage(files[offset], current, width, height, area, templateImage)
+          : await processServerImage(files[offset], current, width, height, area);
         completed += 1;
         updateProgress(completed, files.length, `${label}：${files[offset].name}`);
         setStatus(`正在生成 ${completed} / ${files.length}`);
@@ -612,6 +656,11 @@ async function logout() {
 
 productsInput.addEventListener("change", updateFileList);
 clearProductsButton.addEventListener("click", clearProducts);
+centerProductButton.addEventListener("click", () => {
+  productCenterXInput.value = "";
+  productCenterYInput.value = "";
+  setStatus("商品图位置已设为居中");
+});
 templateSelect.addEventListener("change", updateTemplatePreview);
 templateInput.addEventListener("change", () => uploadTemplate().catch((error) => setStatus(error.message)));
 processBtn.addEventListener("click", processImages);

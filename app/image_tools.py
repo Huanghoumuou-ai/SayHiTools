@@ -21,7 +21,8 @@ MAX_IMAGE_BYTES = 25 * 1024 * 1024
 MAX_BATCH_SIZE = 50
 MIN_OUTPUT_SIZE = 64
 MAX_OUTPUT_SIZE = 5000
-PRODUCT_AREA_RATIO = 0.75
+DEFAULT_PRODUCT_AREA_WIDTH = 1080
+DEFAULT_PRODUCT_AREA_HEIGHT = 1080
 
 
 @dataclass(frozen=True)
@@ -163,10 +164,28 @@ def parse_background_color(value: str) -> tuple[int, int, int, int]:
     raise HTTPException(status_code=400, detail="背景色必须是 #RRGGBB 格式")
 
 
-def product_area_size(width: int, height: int) -> tuple[int, int]:
-    area_width = max(1, int(round(width * PRODUCT_AREA_RATIO)))
-    area_height = max(1, int(round(height * PRODUCT_AREA_RATIO)))
-    return area_width, area_height
+def resolve_product_area(
+    width: int,
+    height: int,
+    product_area_width: int | None = None,
+    product_area_height: int | None = None,
+    product_center_x: int | None = None,
+    product_center_y: int | None = None,
+) -> tuple[int, int, int, int]:
+    area_width = product_area_width or min(DEFAULT_PRODUCT_AREA_WIDTH, width)
+    area_height = product_area_height or min(DEFAULT_PRODUCT_AREA_HEIGHT, height)
+    if area_width < 1 or area_height < 1:
+        raise HTTPException(status_code=400, detail="商品图区域宽高必须大于 0")
+    area_width = min(area_width, width)
+    area_height = min(area_height, height)
+
+    center_x = product_center_x if product_center_x is not None else width // 2
+    center_y = product_center_y if product_center_y is not None else height // 2
+    left = int(round(center_x - area_width / 2))
+    top = int(round(center_y - area_height / 2))
+    left = min(max(left, 0), width - area_width)
+    top = min(max(top, 0), height - area_height)
+    return left, top, area_width, area_height
 
 
 def fit_product_on_canvas(
@@ -174,11 +193,23 @@ def fit_product_on_canvas(
     width: int,
     height: int,
     background_color: tuple[int, int, int, int],
+    product_area_width: int | None = None,
+    product_area_height: int | None = None,
+    product_center_x: int | None = None,
+    product_center_y: int | None = None,
 ) -> Image.Image:
     canvas = Image.new("RGBA", (width, height), background_color)
     product_rgba = ImageOps.exif_transpose(product).convert("RGBA")
-    fitted = ImageOps.contain(product_rgba, product_area_size(width, height), method=Image.Resampling.LANCZOS)
-    offset = ((width - fitted.width) // 2, (height - fitted.height) // 2)
+    area_left, area_top, area_width, area_height = resolve_product_area(
+        width,
+        height,
+        product_area_width=product_area_width,
+        product_area_height=product_area_height,
+        product_center_x=product_center_x,
+        product_center_y=product_center_y,
+    )
+    fitted = ImageOps.contain(product_rgba, (area_width, area_height), method=Image.Resampling.LANCZOS)
+    offset = (area_left + (area_width - fitted.width) // 2, area_top + (area_height - fitted.height) // 2)
     canvas.alpha_composite(fitted, dest=offset)
     return canvas
 
@@ -195,9 +226,22 @@ def compose_product_with_template(
     width: int,
     height: int,
     background_color: tuple[int, int, int, int],
+    product_area_width: int | None = None,
+    product_area_height: int | None = None,
+    product_center_x: int | None = None,
+    product_center_y: int | None = None,
 ) -> bytes:
     product = open_image(product_raw, product_filename)
-    canvas = fit_product_on_canvas(product, width, height, background_color)
+    canvas = fit_product_on_canvas(
+        product,
+        width,
+        height,
+        background_color,
+        product_area_width=product_area_width,
+        product_area_height=product_area_height,
+        product_center_x=product_center_x,
+        product_center_y=product_center_y,
+    )
     overlay = resize_template(template, width, height)
     canvas.alpha_composite(overlay)
     output = io.BytesIO()
@@ -213,6 +257,10 @@ async def build_result_zip(
     base_name: str,
     background_color: str = "#ffffff",
     output_names: list[str] | None = None,
+    product_area_width: int | None = None,
+    product_area_height: int | None = None,
+    product_center_x: int | None = None,
+    product_center_y: int | None = None,
 ) -> tuple[str, bytes, list[dict[str, str]]]:
     product_list = list(products)
     if not product_list:
@@ -240,6 +288,10 @@ async def build_result_zip(
                 width=width,
                 height=height,
                 background_color=parsed_background,
+                product_area_width=product_area_width,
+                product_area_height=product_area_height,
+                product_center_x=product_center_x,
+                product_center_y=product_center_y,
             )
             zip_file.writestr(filename, png_bytes)
             previews.append(
@@ -261,6 +313,10 @@ async def build_single_preview(
     base_name: str,
     index: int,
     background_color: str = "#ffffff",
+    product_area_width: int | None = None,
+    product_area_height: int | None = None,
+    product_center_x: int | None = None,
+    product_center_y: int | None = None,
 ) -> dict[str, str]:
     validate_output_size(width, height)
     parsed_background = parse_background_color(background_color)
@@ -275,6 +331,10 @@ async def build_single_preview(
         width=width,
         height=height,
         background_color=parsed_background,
+        product_area_width=product_area_width,
+        product_area_height=product_area_height,
+        product_center_x=product_center_x,
+        product_center_y=product_center_y,
     )
     return {
         "filename": filename,

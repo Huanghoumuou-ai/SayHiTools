@@ -112,6 +112,10 @@ async def api_process_one(
     base_name: Annotated[str, Form()] = "product",
     index: Annotated[int, Form()] = 1,
     background_color: Annotated[str, Form()] = "#ffffff",
+    product_area_width: Annotated[int | None, Form()] = None,
+    product_area_height: Annotated[int | None, Form()] = None,
+    product_center_x: Annotated[int | None, Form()] = None,
+    product_center_y: Annotated[int | None, Form()] = None,
     _: Annotated[object, Depends(require_auth)] = None,
 ) -> dict[str, object]:
     template_path = resolve_template_path(TEMPLATES_DIR, template_id)
@@ -123,6 +127,10 @@ async def api_process_one(
         base_name=base_name,
         index=index,
         background_color=background_color,
+        product_area_width=product_area_width,
+        product_area_height=product_area_height,
+        product_center_x=product_center_x,
+        product_center_y=product_center_y,
     )
     return {"preview": preview}
 
@@ -137,6 +145,10 @@ async def api_process(
     background_color: Annotated[str, Form()] = "#ffffff",
     output_names: Annotated[str | None, Form()] = None,
     preview: Annotated[bool, Form()] = False,
+    product_area_width: Annotated[int | None, Form()] = None,
+    product_area_height: Annotated[int | None, Form()] = None,
+    product_center_x: Annotated[int | None, Form()] = None,
+    product_center_y: Annotated[int | None, Form()] = None,
     _: Annotated[object, Depends(require_auth)] = None,
 ):
     parsed_output_names = None
@@ -157,6 +169,10 @@ async def api_process(
         base_name=base_name,
         background_color=background_color,
         output_names=parsed_output_names,
+        product_area_width=product_area_width,
+        product_area_height=product_area_height,
+        product_center_x=product_center_x,
+        product_center_y=product_center_y,
     )
     if preview:
         return JSONResponse(

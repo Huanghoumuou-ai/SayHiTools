@@ -122,6 +122,32 @@ def test_product_is_scaled_into_center_area_and_background_color_is_used(client)
     assert output.getpixel((720, 720)) == (20, 80, 140, 255)
 
 
+def test_product_area_size_and_center_can_be_customized(client):
+    response = client.post(
+        "/api/process",
+        data={
+            "template_id": "default",
+            "width": "1440",
+            "height": "1440",
+            "base_name": "positioned",
+            "background_color": "#00ff00",
+            "product_area_width": "500",
+            "product_area_height": "500",
+            "product_center_x": "300",
+            "product_center_y": "300",
+        },
+        files=[("products", ("square.png", make_png((1000, 1000), (20, 80, 140, 255)), "image/png"))],
+    )
+
+    assert response.status_code == 200
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    output = Image.open(io.BytesIO(archive.read("positioned_001.png"))).convert("RGBA")
+
+    assert output.getpixel((300, 300)) == (20, 80, 140, 255)
+    assert output.getpixel((40, 300)) == (0, 255, 0, 255)
+    assert output.getpixel((560, 300)) == (0, 255, 0, 255)
+
+
 def test_process_preview_returns_images_and_zip(client):
     response = client.post(
         "/api/process",
