@@ -1,7 +1,9 @@
 const productsInput = document.querySelector("#productsInput");
 const templateInput = document.querySelector("#templateInput");
 const templateSelect = document.querySelector("#templateSelect");
+const templatePreviewWrap = document.querySelector("#templatePreviewWrap");
 const templatePreview = document.querySelector("#templatePreview");
+const productAreaOverlay = document.querySelector("#productAreaOverlay");
 const fileCount = document.querySelector("#fileCount");
 const fileList = document.querySelector("#fileList");
 const dropzone = document.querySelector("#dropzone");
@@ -187,6 +189,7 @@ async function loadTemplates(selectedId) {
 function updateTemplatePreview() {
   const id = templateSelect.value || "default";
   templatePreview.src = `/api/templates/${encodeURIComponent(id)}/preview?ts=${Date.now()}`;
+  updateOutputPreviewGuide();
 }
 
 async function uploadTemplate() {
@@ -241,6 +244,37 @@ function validateForm() {
     throw new Error("商品图中心位置需要在输出画布范围内");
   }
   return { files, width, height, productAreaWidth, productAreaHeight, productCenterX, productCenterY };
+}
+
+function readOutputPreviewSettings() {
+  const width = Number(widthInput.value) || 1440;
+  const height = Number(heightInput.value) || 1440;
+  const productAreaWidth = Number(productAreaWidthInput.value) || 1080;
+  const productAreaHeight = Number(productAreaHeightInput.value) || 1080;
+  const productCenterX = productCenterXInput.value.trim() ? Number(productCenterXInput.value) : null;
+  const productCenterY = productCenterYInput.value.trim() ? Number(productCenterYInput.value) : null;
+  return { width, height, productAreaWidth, productAreaHeight, productCenterX, productCenterY };
+}
+
+function updateOutputPreviewGuide() {
+  const settings = readOutputPreviewSettings();
+  const width = Math.max(1, settings.width);
+  const height = Math.max(1, settings.height);
+  const area = {
+    productAreaWidth: Math.max(1, settings.productAreaWidth),
+    productAreaHeight: Math.max(1, settings.productAreaHeight),
+    productCenterX: settings.productCenterX,
+    productCenterY: settings.productCenterY,
+  };
+  const resolved = resolveProductArea(width, height, area);
+
+  templatePreviewWrap.style.aspectRatio = `${width} / ${height}`;
+  templatePreviewWrap.style.backgroundColor = backgroundColorInput.value || "#ffffff";
+  productAreaOverlay.style.left = `${(resolved.left / width) * 100}%`;
+  productAreaOverlay.style.top = `${(resolved.top / height) * 100}%`;
+  productAreaOverlay.style.width = `${(resolved.areaWidth / width) * 100}%`;
+  productAreaOverlay.style.height = `${(resolved.areaHeight / height) * 100}%`;
+  productAreaOverlay.querySelector("span").textContent = `${resolved.areaWidth} x ${resolved.areaHeight}`;
 }
 
 function buildProcessFormData({ preview, outputNames } = { preview: true }) {
@@ -659,6 +693,7 @@ clearProductsButton.addEventListener("click", clearProducts);
 centerProductButton.addEventListener("click", () => {
   productCenterXInput.value = "";
   productCenterYInput.value = "";
+  updateOutputPreviewGuide();
   setStatus("商品图位置已设为居中");
 });
 templateSelect.addEventListener("change", updateTemplatePreview);
@@ -666,6 +701,9 @@ templateInput.addEventListener("change", () => uploadTemplate().catch((error) =>
 processBtn.addEventListener("click", processImages);
 downloadLink.addEventListener("click", downloadEditedZip);
 logoutButton.addEventListener("click", logout);
+[widthInput, heightInput, productAreaWidthInput, productAreaHeightInput, productCenterXInput, productCenterYInput, backgroundColorInput].forEach((input) => {
+  input.addEventListener("input", updateOutputPreviewGuide);
+});
 
 dropzone.addEventListener("dragover", (event) => {
   event.preventDefault();
@@ -686,4 +724,5 @@ dropzone.addEventListener("drop", (event) => {
 });
 
 initMotion();
+updateOutputPreviewGuide();
 loadTemplates().catch((error) => setStatus(error.message));

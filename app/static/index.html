@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SayHi 图片融合工具</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260527-area1" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260528-preview1" />
   </head>
   <body>
     <main class="app-shell">
@@ -69,7 +69,10 @@
             <select id="templateSelect"></select>
           </label>
 
-          <div class="template-preview-wrap">
+          <div id="templatePreviewWrap" class="template-preview-wrap" aria-label="输出画布预览">
+            <div id="productAreaOverlay" class="product-area-overlay">
+              <span>商品图区域</span>
+            </div>
             <img id="templatePreview" alt="当前模板预览" />
           </div>
 
@@ -155,6 +158,6 @@
       </section>
     </main>
 
-    <script src="/static/app.js?v=20260527-area1"></script>
+    <script src="/static/app.js?v=20260528-preview1"></script>
   </body>
 </html>
